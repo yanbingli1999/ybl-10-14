@@ -100,7 +100,7 @@ export interface ConsultationRecord {
   opinions: ConsultationOpinion[];
   adoptedDiagnosis: DiseaseType | null;
   adoptedStaffId: string | null;
-  revenueBonus: number;
+  adoptedCorrectly: boolean | null;
 }
 
 export interface Bed {
@@ -119,7 +119,7 @@ export interface Bed {
     opinions: ConsultationOpinion[];
     adoptedDiagnosis: DiseaseType | null;
     adoptedStaffId: string | null;
-    revenueBonus: number;
+    adoptedCorrectly: boolean | null;
   } | null;
   beastSnapshot: {
     id: string;
@@ -161,7 +161,7 @@ export interface MedicalRecord {
     opinions: ConsultationOpinion[];
     adoptedDiagnosis: DiseaseType | null;
     adoptedStaffId: string | null;
-    revenueBonus: number;
+    adoptedCorrectly: boolean | null;
   };
 }
 

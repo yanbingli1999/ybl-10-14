@@ -42,7 +42,6 @@ export function ConsultationModal({ open, onClose, onAdopt }: ConsultationModalP
   const currentConsultation = useGameStore(s => s.currentConsultation);
   const consultationBeastId = useGameStore(s => s.consultationBeastId);
   const startConsultation = useGameStore(s => s.startConsultation);
-  const clearConsultation = useGameStore(s => s.clearConsultation);
 
   const [selectedStaffIds, setSelectedStaffIds] = useState<string[]>([]);
   const [adoptedOpinion, setAdoptedOpinion] = useState<ConsultationOpinion | null>(null);
@@ -80,7 +79,6 @@ export function ConsultationModal({ open, onClose, onAdopt }: ConsultationModalP
   };
 
   const handleClose = () => {
-    clearConsultation();
     setSelectedStaffIds([]);
     setAdoptedOpinion(null);
     onClose();

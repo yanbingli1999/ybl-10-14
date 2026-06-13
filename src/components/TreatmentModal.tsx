@@ -114,13 +114,13 @@ export function TreatmentModal({ open, onClose, targetBed }: TreatmentModalProps
   const handleSubmit = () => {
     if (!canSubmit || !targetBed) return;
 
-    const hasConsultation = currentConsultation && consultationBeastId === beast.id && adoptedConsultation;
+    const hasConsultation = currentConsultation && consultationBeastId === beast.id;
     const consultationData = hasConsultation
       ? {
           opinions: currentConsultation!,
-          adoptedDiagnosis: adoptedConsultation!.diagnosis,
-          adoptedStaffId: adoptedConsultation!.staffId,
-          revenueBonus: CONSULTATION_CONFIG.correctDiagnosisRevenueBonus,
+          adoptedDiagnosis: adoptedConsultation?.diagnosis ?? null,
+          adoptedStaffId: adoptedConsultation?.staffId ?? null,
+          adoptedCorrectly: adoptedConsultation ? adoptedConsultation.diagnosis === beast.disease : null,
         }
       : null;
 
@@ -198,9 +198,20 @@ export function TreatmentModal({ open, onClose, targetBed }: TreatmentModalProps
               {adoptedConsultation ? (
                 <>
                   <span>已会诊：采纳 {adoptedConsultation.staffName} 的意见</span>
-                  <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                    +{Math.floor(CONSULTATION_CONFIG.correctDiagnosisRevenueBonus * 100)}% 收益
-                  </span>
+                  {adoptedConsultation.diagnosis === beast.disease ? (
+                    <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                      +{Math.floor(CONSULTATION_CONFIG.correctDiagnosisRevenueBonus * 100)}% 收益
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">
+                      诊断有误，无加成
+                    </span>
+                  )}
+                </>
+              ) : currentConsultation && consultationBeastId === beast.id ? (
+                <>
+                  <span>已会诊：未采纳意见，自主诊断</span>
+                  <span className="text-[10px] text-gray-500">可重新查看</span>
                 </>
               ) : (
                 <>

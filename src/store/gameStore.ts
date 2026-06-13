@@ -167,7 +167,7 @@ export interface GameState {
   selectBeast: (id: string | null) => void;
   selectBed: (id: string | null) => void;
   dismissBeast: (id: string) => void;
-  assignBedAndTreat: (beastId: string, bedId: string, staffId: string | null, herbIds: string[], playerDiagnosis: DiseaseType | null, consultation?: { opinions: ConsultationOpinion[]; adoptedDiagnosis: DiseaseType | null; adoptedStaffId: string | null; revenueBonus: number } | null) => void;
+  assignBedAndTreat: (beastId: string, bedId: string, staffId: string | null, herbIds: string[], playerDiagnosis: DiseaseType | null, consultation?: { opinions: ConsultationOpinion[]; adoptedDiagnosis: DiseaseType | null; adoptedStaffId: string | null; adoptedCorrectly: boolean | null } | null) => void;
   purchaseHerb: (herbId: string, qty: number) => void;
   collectFromBed: (bedId: string) => void;
   addNotification: (type: Notification["type"], message: string) => void;
@@ -451,7 +451,7 @@ export const useGameStore = create<GameState>()(
             opinions: consultation.opinions,
             adoptedDiagnosis: consultation.adoptedDiagnosis,
             adoptedStaffId: consultation.adoptedStaffId,
-            revenueBonus: consultation.revenueBonus,
+            adoptedCorrectly: consultation.adoptedCorrectly,
           } : null,
           beastSnapshot: {
             id: beast.id,
@@ -500,7 +500,8 @@ export const useGameStore = create<GameState>()(
 
         const breed = BREEDS.find(b => b.id === (beast?.breedId || ""));
         const consultation = bed.consultation;
-        const consultationBonus = consultation?.revenueBonus ?? 0;
+        const adoptedCorrectly = consultation?.adoptedCorrectly === true;
+        const consultationBonus = adoptedCorrectly ? CONSULTATION_CONFIG.correctDiagnosisRevenueBonus : 0;
 
         if (bed.result === "success" && beast && breed) {
           const severityMult = { mild: 1, moderate: 1.4, severe: 1.8, critical: 2.3 }[beast.severity] || 1;
@@ -552,7 +553,7 @@ export const useGameStore = create<GameState>()(
               opinions: consultation.opinions,
               adoptedDiagnosis: consultation.adoptedDiagnosis,
               adoptedStaffId: consultation.adoptedStaffId,
-              revenueBonus: consultation.revenueBonus,
+              adoptedCorrectly: consultation.adoptedCorrectly,
             } : undefined,
           };
 
@@ -599,7 +600,7 @@ export const useGameStore = create<GameState>()(
               opinions: consultation.opinions,
               adoptedDiagnosis: consultation.adoptedDiagnosis,
               adoptedStaffId: consultation.adoptedStaffId,
-              revenueBonus: consultation.revenueBonus,
+              adoptedCorrectly: consultation.adoptedCorrectly,
             } : undefined,
           };
 

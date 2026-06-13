@@ -206,21 +206,34 @@ export default function ArchivePage() {
                           <div className="flex items-center gap-1.5 mb-2 text-clinic-deep font-semibold">
                             <MessageCircle className="w-4 h-4 text-clinic-jade" />
                             会诊记录
-                            {r.consultation.adoptedDiagnosis && (
+                            {r.consultation.adoptedDiagnosis && r.consultation.adoptedCorrectly === true && (
                               <span className="ml-auto text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-                                已采纳
+                                ✓ 采纳正确
+                              </span>
+                            )}
+                            {r.consultation.adoptedDiagnosis && r.consultation.adoptedCorrectly === false && (
+                              <span className="ml-auto text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                                ✗ 采纳错误
+                              </span>
+                            )}
+                            {r.consultation.adoptedDiagnosis === null && (
+                              <span className="ml-auto text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                                未采纳
                               </span>
                             )}
                           </div>
                           <div className="space-y-1.5">
                             {r.consultation.opinions.map((op, idx) => {
                               const isAdopted = op.staffId === r.consultation?.adoptedStaffId;
+                              const opinionCorrect = op.diagnosis === r.disease;
                               return (
                                 <div
                                   key={idx}
                                   className={`p-2 rounded-lg border text-[11px] ${
-                                    isAdopted
+                                    isAdopted && r.consultation?.adoptedCorrectly === true
                                       ? "bg-clinic-jade/10 border-clinic-jade/40"
+                                      : isAdopted && r.consultation?.adoptedCorrectly === false
+                                      ? "bg-red-50 border-red-300"
                                       : "bg-white/60 border-gray-200"
                                   }`}
                                 >
@@ -228,17 +241,29 @@ export default function ArchivePage() {
                                     <span className="text-base">{op.staffEmoji}</span>
                                     <span className="font-medium text-clinic-deep">{op.staffName}</span>
                                     <span className="text-gray-400">Lv.{op.skillLevel}</span>
-                                    {isAdopted && (
+                                    {isAdopted && r.consultation?.adoptedCorrectly === true && (
                                       <span className="ml-auto text-[10px] text-emerald-600 font-medium">
-                                        ✓ 采纳
+                                        ✓ 采纳（正确）
                                       </span>
                                     )}
-                                    <span className="ml-auto text-[10px] text-gray-500">
-                                      可信度 {op.confidence}%
-                                    </span>
+                                    {isAdopted && r.consultation?.adoptedCorrectly === false && (
+                                      <span className="ml-auto text-[10px] text-red-600 font-medium">
+                                        ✗ 采纳（错误）
+                                      </span>
+                                    )}
+                                    {!isAdopted && (
+                                      <span className="ml-auto text-[10px] text-gray-500">
+                                        可信度 {op.confidence}%
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="text-gray-600">
                                     诊断：<span className="font-medium">{DISEASE_NAMES[op.diagnosis]}</span>
+                                    {opinionCorrect ? (
+                                      <span className="ml-1 text-emerald-600 text-[10px]">✔ 与确诊一致</span>
+                                    ) : (
+                                      <span className="ml-1 text-red-500 text-[10px]">✘ 与确诊不符</span>
+                                    )}
                                   </div>
                                   <div className="text-gray-500 italic mt-0.5">
                                     「{op.reasoning}」
@@ -247,9 +272,19 @@ export default function ArchivePage() {
                               );
                             })}
                           </div>
-                          {r.consultation.revenueBonus > 0 && (
+                          {r.consultation.adoptedCorrectly === true && (
                             <div className="mt-2 text-[11px] text-emerald-700 bg-emerald-50 p-1.5 rounded text-center">
-                              💡 会诊诊断正确，收益加成 +{Math.floor(r.consultation.revenueBonus * 100)}%
+                              💡 会诊诊断正确，收益加成 +{Math.floor(CONSULTATION_CONFIG.correctDiagnosisRevenueBonus * 100)}%
+                            </div>
+                          )}
+                          {r.consultation.adoptedCorrectly === false && (
+                            <div className="mt-2 text-[11px] text-red-600 bg-red-50 p-1.5 rounded text-center">
+                              ⚠️ 采纳了错误的会诊意见，无收益加成
+                            </div>
+                          )}
+                          {r.consultation.adoptedDiagnosis === null && (
+                            <div className="mt-2 text-[11px] text-gray-500 bg-gray-50 p-1.5 rounded text-center">
+                              ℹ️ 未采纳会诊意见，自主诊断
                             </div>
                           )}
                         </div>
