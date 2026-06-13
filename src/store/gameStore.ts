@@ -13,6 +13,7 @@ import type {
   WeatherType,
   Prescription,
   TreatmentResult,
+  ConsultationOpinion,
 } from "@/types/game";
 import {
   BREEDS,
@@ -26,6 +27,8 @@ import {
   NOTES_SUCCESS,
   NOTES_FAIL,
   DISEASE_NAMES,
+  CONSULTATION_CONFIG,
+  CONSULTATION_REASONINGS,
 } from "@/data/gameData";
 
 const DISEASE_TYPES: DiseaseType[] = [
@@ -99,6 +102,42 @@ export function guessDiseaseFromSymptoms(symptoms: string[]): { disease: Disease
   return results.sort((a, b) => b.matchRate - a.matchRate);
 }
 
+function generateConsultationOpinion(
+  staff: Staff,
+  symptoms: string[],
+  trueDisease: DiseaseType
+): ConsultationOpinion {
+  const suspected = guessDiseaseFromSymptoms(symptoms);
+  const { skillConfidenceBonus, fatigueConfidencePenalty, baseConfidence, minConfidence } = CONSULTATION_CONFIG;
+
+  const diagnosisCorrect = Math.random() * 100 < (baseConfidence + staff.skillLevel * skillConfidenceBonus - staff.fatigue * fatigueConfidencePenalty);
+
+  let diagnosis: DiseaseType;
+  if (diagnosisCorrect) {
+    diagnosis = trueDisease;
+  } else {
+    const wrongOnes = suspected.filter(s => s.disease !== trueDisease);
+    diagnosis = wrongOnes.length > 0 ? wrongOnes[Math.floor(Math.random() * wrongOnes.length)].disease : suspected[0].disease;
+  }
+
+  const baseConf = baseConfidence + staff.skillLevel * skillConfidenceBonus - staff.fatigue * fatigueConfidencePenalty;
+  const confidence = Math.max(minConfidence, Math.min(95, Math.floor(baseConf + (Math.random() - 0.5) * 10)));
+
+  const reasonings = CONSULTATION_REASONINGS[diagnosis] || ["症状不典型，需要进一步观察。"];
+  const reasoning = reasonings[Math.floor(Math.random() * reasonings.length)];
+
+  return {
+    staffId: staff.id,
+    staffName: staff.name,
+    staffEmoji: staff.emoji,
+    skillLevel: staff.skillLevel,
+    fatigue: staff.fatigue,
+    diagnosis,
+    confidence,
+    reasoning,
+  };
+}
+
 export interface GameState {
   money: number;
   reputation: number;
@@ -119,6 +158,8 @@ export interface GameState {
   selectedBeastId: string | null;
   selectedBedId: string | null;
   lastBeastSpawn: number;
+  currentConsultation: ConsultationOpinion[] | null;
+  consultationBeastId: string | null;
 
   // Actions
   togglePause: () => void;
@@ -126,13 +167,16 @@ export interface GameState {
   selectBeast: (id: string | null) => void;
   selectBed: (id: string | null) => void;
   dismissBeast: (id: string) => void;
-  assignBedAndTreat: (beastId: string, bedId: string, staffId: string | null, herbIds: string[], playerDiagnosis: DiseaseType | null) => void;
+  assignBedAndTreat: (beastId: string, bedId: string, staffId: string | null, herbIds: string[], playerDiagnosis: DiseaseType | null, consultation?: { opinions: ConsultationOpinion[]; adoptedDiagnosis: DiseaseType | null; adoptedStaffId: string | null; revenueBonus: number } | null) => void;
   purchaseHerb: (herbId: string, qty: number) => void;
   collectFromBed: (bedId: string) => void;
   addNotification: (type: Notification["type"], message: string) => void;
   clearNotification: (id: string) => void;
   resetGame: () => void;
   tickGame: (steps?: number) => void;
+  startConsultation: (beastId: string, staffIds: string[]) => void;
+  clearConsultation: () => void;
+  restStaff: (staffId: string) => void;
   _spawnInitialBeasts: () => void;
   _addTransaction: (type: Transaction["type"], category: string, amount: number, description: string) => void;
   _dailySettlement: () => void;
@@ -151,6 +195,7 @@ function createInitialBeds(): Bed[] {
     currentPrescriptionHerbs: [],
     playerDiagnosis: null,
     startedAt: null,
+    consultation: null,
     beastSnapshot: null,
   }));
 }
@@ -179,9 +224,11 @@ function buildInitialState() {
     beastRelationships: {} as Record<string, BeastRelationship>,
     transactions: [] as Transaction[],
     notifications: [] as Notification[],
-    selectedBeastId: null,
-    selectedBedId: null,
+    selectedBeastId: null as string | null,
+    selectedBedId: null as string | null,
     lastBeastSpawn: 8,
+    currentConsultation: null as ConsultationOpinion[] | null,
+    consultationBeastId: null as string | null,
   };
 }
 
@@ -256,7 +303,105 @@ export const useGameStore = create<GameState>()(
         get().addNotification("success", `采购 ${herb.name} x${qty}，花费${totalCost}金`);
       },
 
-      assignBedAndTreat: (beastId, bedId, staffId, herbIds, playerDiagnosis) => {
+      startConsultation: (beastId, staffIds) => {
+        const s = get();
+        const beast = s.waitingQueue.find(b => b.id === beastId);
+        if (!beast) {
+          s.addNotification("error", "未找到该灵兽");
+          return;
+        }
+        if (staffIds.length === 0) {
+          s.addNotification("error", "请至少选择一位护理员参与会诊");
+          return;
+        }
+        const selectedStaff = staffIds.map(id => s.staff.find(st => st.id === id)).filter(Boolean) as Staff[];
+        const busyStaff = selectedStaff.filter(st => st.status !== "idle");
+        if (busyStaff.length > 0) {
+          s.addNotification("error", "存在非空闲的护理员，无法参与会诊");
+          return;
+        }
+        const tiredStaff = selectedStaff.filter(st => st.fatigue >= CONSULTATION_CONFIG.maxFatigue);
+        if (tiredStaff.length > 0) {
+          s.addNotification("error", "部分护理员过于疲劳，需要休息");
+          return;
+        }
+
+        const { baseDurationHours, fatigueIncreasePerConsult, maxFatigue, waitingSatisfactionPenalty } = CONSULTATION_CONFIG;
+        const duration = baseDurationHours;
+
+        const opinions = selectedStaff.map(st => generateConsultationOpinion(st, beast.symptoms, beast.disease));
+
+        const newStaff = s.staff.map(st => {
+          if (staffIds.includes(st.id)) {
+            return { ...st, fatigue: Math.min(maxFatigue, st.fatigue + fatigueIncreasePerConsult) };
+          }
+          return st;
+        });
+
+        const newQueue = s.waitingQueue.map(b => {
+          if (b.id === beastId) {
+            return { ...b, satisfaction: Math.max(0, b.satisfaction - waitingSatisfactionPenalty) };
+          }
+          return { ...b, waitHours: b.waitHours + duration, satisfaction: Math.max(0, b.satisfaction - randomInt(1, 3)) };
+        });
+
+        let newTime = s.currentTime + duration;
+        let dayPassed = false;
+        if (newTime >= 24) { dayPassed = true; newTime = 8; }
+
+        set(st => ({
+          ...st,
+          staff: newStaff,
+          waitingQueue: newQueue,
+          currentTime: dayPassed ? 8 : newTime,
+          currentConsultation: opinions,
+          consultationBeastId: beastId,
+        }));
+
+        get().addNotification("info", `会诊完成！邀请了${selectedStaff.length}位护理员参与，耗时${duration}小时`);
+
+        if (dayPassed) get()._dailySettlement();
+      },
+
+      clearConsultation: () => {
+        set({ currentConsultation: null, consultationBeastId: null });
+      },
+
+      restStaff: (staffId) => {
+        const s = get();
+        const st = s.staff.find(x => x.id === staffId);
+        if (!st) return;
+        if (st.status !== "idle") {
+          s.addNotification("error", "该护理员当前正在工作，无法休息");
+          return;
+        }
+        const restHours = 2;
+        const recovery = CONSULTATION_CONFIG.fatigueRecoveryPerHour * restHours;
+        const newStaff = s.staff.map(x => x.id === staffId ? { ...x, fatigue: Math.max(0, x.fatigue - recovery), status: "resting" as const } : x);
+
+        let newTime = s.currentTime + restHours;
+        let dayPassed = false;
+        if (newTime >= 24) { dayPassed = true; newTime = 8; }
+
+        const newQueue = s.waitingQueue.map(b => ({
+          ...b,
+          waitHours: b.waitHours + restHours,
+          satisfaction: Math.max(0, b.satisfaction - randomInt(1, 3)),
+        }));
+
+        set(st => ({
+          ...st,
+          staff: newStaff,
+          currentTime: dayPassed ? 8 : newTime,
+          waitingQueue: newQueue,
+        }));
+
+        get().addNotification("info", `${st.name}开始休息，预计恢复${recovery}点疲劳度`);
+
+        if (dayPassed) get()._dailySettlement();
+      },
+
+      assignBedAndTreat: (beastId, bedId, staffId, herbIds, playerDiagnosis, consultation) => {
         const s = get();
         const beast = s.waitingQueue.find(b => b.id === beastId);
         const bed = s.beds.find(b => b.id === bedId);
@@ -302,6 +447,12 @@ export const useGameStore = create<GameState>()(
           currentPrescriptionHerbs: [...herbIds],
           playerDiagnosis,
           startedAt: s.currentTime,
+          consultation: consultation && consultation.opinions.length > 0 ? {
+            opinions: consultation.opinions,
+            adoptedDiagnosis: consultation.adoptedDiagnosis,
+            adoptedStaffId: consultation.adoptedStaffId,
+            revenueBonus: consultation.revenueBonus,
+          } : null,
           beastSnapshot: {
             id: beast.id,
             breedId: beast.breedId,
@@ -326,6 +477,8 @@ export const useGameStore = create<GameState>()(
           money: st.money - herbsCost,
           discoveredBreeds: newDiscovered,
           selectedBeastId: null,
+          currentConsultation: null,
+          consultationBeastId: null,
         }));
         get()._addTransaction("expense", "药材消耗", herbsCost, `${beast.name} 治疗消耗药材`);
         get().addNotification("info", `${beast.name} 已入住 ${bed.name}，预计${totalHours}小时治疗`);
@@ -346,12 +499,15 @@ export const useGameStore = create<GameState>()(
         void usedPrescNames;
 
         const breed = BREEDS.find(b => b.id === (beast?.breedId || ""));
+        const consultation = bed.consultation;
+        const consultationBonus = consultation?.revenueBonus ?? 0;
 
         if (bed.result === "success" && beast && breed) {
           const severityMult = { mild: 1, moderate: 1.4, severe: 1.8, critical: 2.3 }[beast.severity] || 1;
           const satMult = beast.satisfaction / 100;
           const reputationBonus = s.reputation / 100;
-          const revenue = Math.floor(breed.baseFees * severityMult * (0.8 + 0.4 * satMult) * (1 + reputationBonus * 0.3));
+          const baseRevenue = Math.floor(breed.baseFees * severityMult * (0.8 + 0.4 * satMult) * (1 + reputationBonus * 0.3));
+          const revenue = Math.floor(baseRevenue * (1 + consultationBonus));
           let repGain = Math.ceil(3 * severityMult * satMult);
           const trustGain = Math.ceil(10 * severityMult * satMult);
 
@@ -392,6 +548,12 @@ export const useGameStore = create<GameState>()(
             daysToHeal,
             evolved,
             notes: evolved ? `${notes} 灵兽发生了进化！` : notes,
+            consultation: consultation ? {
+              opinions: consultation.opinions,
+              adoptedDiagnosis: consultation.adoptedDiagnosis,
+              adoptedStaffId: consultation.adoptedStaffId,
+              revenueBonus: consultation.revenueBonus,
+            } : undefined,
           };
 
           const newRel: BeastRelationship = {
@@ -408,10 +570,11 @@ export const useGameStore = create<GameState>()(
             beastRelationships: { ...st.beastRelationships, [breed.id]: newRel },
             medicalRecords: [record, ...st.medicalRecords],
           }));
-          get()._addTransaction("income", "诊金收入", revenue, `治愈 ${breed.name}·${beast.name}${evolved ? "(进化加成)" : ""}`);
+          get()._addTransaction("income", "诊金收入", revenue, `治愈 ${breed.name}·${beast.name}${evolved ? "(进化加成)" : ""}${consultationBonus > 0 ? "(会诊加成)" : ""}`);
           const evolveMsg = evolved ? " 🎉灵兽发生进化！额外获得加成！" : "";
           const diagMsg = diagnosisCorrect ? " 🔍诊断正确！" : "";
-          get().addNotification("success", `治愈成功！获得 ${revenue} 金，声望+${repGain}，亲密度+${trustGain}${diagMsg}${evolveMsg}`);
+          const consultMsg = consultationBonus > 0 ? ` 💡会诊收益+${Math.floor(consultationBonus * 100)}%` : "";
+          get().addNotification("success", `治愈成功！获得 ${revenue} 金，声望+${repGain}，亲密度+${trustGain}${diagMsg}${evolveMsg}${consultMsg}`);
         } else if (bed.result === "fail" && beast) {
           const penaltyMoney = Math.floor(s.money * 0.05) + 20;
           const penaltyRep = 5;
@@ -432,6 +595,12 @@ export const useGameStore = create<GameState>()(
             daysToHeal: Math.max(1, Math.ceil((s.currentTime - (bed.startedAt ?? s.currentTime)) / 24) || 1),
             evolved: false,
             notes,
+            consultation: consultation ? {
+              opinions: consultation.opinions,
+              adoptedDiagnosis: consultation.adoptedDiagnosis,
+              adoptedStaffId: consultation.adoptedStaffId,
+              revenueBonus: consultation.revenueBonus,
+            } : undefined,
           };
 
           set(st => ({
@@ -456,6 +625,7 @@ export const useGameStore = create<GameState>()(
           currentPrescriptionHerbs: [],
           playerDiagnosis: null,
           startedAt: null,
+          consultation: null,
           beastSnapshot: null,
         } : b);
         const staffToRelease = bed.assignedStaffId;
@@ -484,7 +654,8 @@ export const useGameStore = create<GameState>()(
             b.status === "occupied" && b.result === "pending" && b.assignedStaffId === st.id
           );
           if (isAssignedToActiveBed) return st;
-          return { ...st, status: "idle" as const, assignedBedId: null };
+          const newFatigue = Math.max(0, st.fatigue - 30);
+          return { ...st, status: "idle" as const, assignedBedId: null, fatigue: newFatigue };
         });
 
         set(st => ({

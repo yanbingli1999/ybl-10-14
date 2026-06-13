@@ -1,12 +1,13 @@
 import { useMemo, useState, useEffect } from "react";
-import { X, Stethoscope, Pill, Users, ArrowRight, AlertCircle, Sparkles, Brain, ChevronDown } from "lucide-react";
+import { X, Stethoscope, Pill, Users, ArrowRight, AlertCircle, Sparkles, Brain, ChevronDown, MessageCircle } from "lucide-react";
 import { useGameStore, guessDiseaseFromSymptoms } from "@/store/gameStore";
 import {
   BREEDS, HERBS, PRESCRIPTIONS,
   SEVERITY_NAMES, SEVERITY_COLORS, DISEASE_NAMES,
-  ELEMENT_EMOJI, ELEMENT_NAMES,
+  ELEMENT_EMOJI, ELEMENT_NAMES, CONSULTATION_CONFIG,
 } from "@/data/gameData";
-import type { Bed, DiseaseType } from "@/types/game";
+import type { Bed, DiseaseType, ConsultationOpinion } from "@/types/game";
+import { ConsultationModal } from "./ConsultationModal";
 
 interface TreatmentModalProps {
   open: boolean;
@@ -28,11 +29,15 @@ export function TreatmentModal({ open, onClose, targetBed }: TreatmentModalProps
   const inventory = useGameStore(s => s.inventory);
   const staff = useGameStore(s => s.staff);
   const assignBedAndTreat = useGameStore(s => s.assignBedAndTreat);
+  const currentConsultation = useGameStore(s => s.currentConsultation);
+  const consultationBeastId = useGameStore(s => s.consultationBeastId);
 
   const [selectedHerbs, setSelectedHerbs] = useState<string[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
   const [playerDiagnosis, setPlayerDiagnosis] = useState<DiseaseType | null>(null);
   const [showAllDiseases, setShowAllDiseases] = useState(false);
+  const [consultationOpen, setConsultationOpen] = useState(false);
+  const [adoptedConsultation, setAdoptedConsultation] = useState<ConsultationOpinion | null>(null);
 
   const beast = useMemo(() => queue.find(b => b.id === selectedBeastId), [queue, selectedBeastId]);
   const breed = beast ? BREEDS.find(b => b.id === beast.breedId) : null;
@@ -56,6 +61,8 @@ export function TreatmentModal({ open, onClose, targetBed }: TreatmentModalProps
       setSelectedStaff(null);
       setPlayerDiagnosis(null);
       setShowAllDiseases(false);
+      setConsultationOpen(false);
+      setAdoptedConsultation(null);
     }
   }, [open, selectedBeastId]);
 
@@ -80,6 +87,23 @@ export function TreatmentModal({ open, onClose, targetBed }: TreatmentModalProps
     setPlayerDiagnosis(prev => prev === disease ? null : disease);
   };
 
+  const handleConsultationAdopt = (opinion: ConsultationOpinion | null) => {
+    if (opinion) {
+      setAdoptedConsultation(opinion);
+      setPlayerDiagnosis(opinion.diagnosis);
+      const presc = PRESCRIPTIONS.find(p => p.disease === opinion.diagnosis);
+      if (presc) {
+        const canAfford = presc.herbIds.every(id => (inventory[id] ?? 0) >= 1);
+        if (canAfford) {
+          setSelectedHerbs([...presc.herbIds]);
+        }
+      }
+    } else {
+      setAdoptedConsultation(null);
+    }
+    setConsultationOpen(false);
+  };
+
   const herbsTotal = selectedHerbs.reduce((sum, id) => {
     const h = HERBS.find(x => x.id === id);
     return sum + (h?.price ?? 0);
@@ -89,7 +113,18 @@ export function TreatmentModal({ open, onClose, targetBed }: TreatmentModalProps
 
   const handleSubmit = () => {
     if (!canSubmit || !targetBed) return;
-    assignBedAndTreat(beast.id, targetBed.id, selectedStaff, selectedHerbs, playerDiagnosis);
+
+    const hasConsultation = currentConsultation && consultationBeastId === beast.id && adoptedConsultation;
+    const consultationData = hasConsultation
+      ? {
+          opinions: currentConsultation!,
+          adoptedDiagnosis: adoptedConsultation!.diagnosis,
+          adoptedStaffId: adoptedConsultation!.staffId,
+          revenueBonus: CONSULTATION_CONFIG.correctDiagnosisRevenueBonus,
+        }
+      : null;
+
+    assignBedAndTreat(beast.id, targetBed.id, selectedStaff, selectedHerbs, playerDiagnosis, consultationData);
     onClose();
   };
 
@@ -152,6 +187,28 @@ export function TreatmentModal({ open, onClose, targetBed }: TreatmentModalProps
                 </span>
               ))}
             </div>
+
+            {/* 会诊入口按钮 */}
+            <button
+              onClick={() => setConsultationOpen(true)}
+              disabled={!targetBed}
+              className="w-full mb-3 py-2 rounded-lg border-2 border-dashed border-clinic-amber/50 bg-clinic-amber/5 text-clinic-deep text-xs font-medium hover:bg-clinic-amber/10 hover:border-clinic-amber/70 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+            >
+              <MessageCircle className="w-4 h-4 text-clinic-amber" />
+              {adoptedConsultation ? (
+                <>
+                  <span>已会诊：采纳 {adoptedConsultation.staffName} 的意见</span>
+                  <span className="text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                    +{Math.floor(CONSULTATION_CONFIG.correctDiagnosisRevenueBonus * 100)}% 收益
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span>疑难病例？邀请护理员会诊</span>
+                  <span className="text-[10px] text-gray-500">耗时1h</span>
+                </>
+              )}
+            </button>
 
             <div className="border-t border-clinic-border/30 pt-3">
               <div className="flex items-center gap-1.5 mb-2">
@@ -385,6 +442,12 @@ export function TreatmentModal({ open, onClose, targetBed }: TreatmentModalProps
             </button>
           </div>
         </div>
+
+        <ConsultationModal
+          open={consultationOpen}
+          onClose={() => setConsultationOpen(false)}
+          onAdopt={handleConsultationAdopt}
+        />
       </div>
     </div>
   );

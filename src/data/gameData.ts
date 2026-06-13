@@ -378,6 +378,7 @@ export const INITIAL_STAFF: Staff[] = [
     status: "idle",
     assignedBedId: null,
     dailyWage: 30,
+    fatigue: 0,
   },
   {
     id: "staff_2",
@@ -388,8 +389,75 @@ export const INITIAL_STAFF: Staff[] = [
     status: "idle",
     assignedBedId: null,
     dailyWage: 50,
+    fatigue: 0,
   },
 ];
+
+export const CONSULTATION_CONFIG = {
+  baseDurationHours: 1,
+  fatigueIncreasePerConsult: 15,
+  fatigueRecoveryPerHour: 5,
+  maxFatigue: 100,
+  minConfidence: 30,
+  baseConfidence: 60,
+  skillConfidenceBonus: 8,
+  fatigueConfidencePenalty: 0.4,
+  correctDiagnosisRevenueBonus: 0.15,
+  waitingSatisfactionPenalty: 5,
+};
+
+export const CONSULTATION_REASONINGS: Record<string, string[]> = {
+  fever: [
+    "体温偏高且魔力发热，灵热症的典型表现。",
+    "食欲不振伴随鼻子发干，应是灵热症。",
+    "从症状来看，高热不退的可能性最大。",
+  ],
+  cold: [
+    "流鼻涕打喷嚏，明显是风寒症。",
+    "身体发冷加咳嗽，风寒症无疑。",
+    "频繁打喷嚏伴随精神萎靡，风寒之象。",
+  ],
+  poisoning: [
+    "呕吐腹泻瞳孔异常，灵毒症的可能性很大。",
+    "皮毛变色口中异味，像是中毒症状。",
+    "综合症状判断，应是误食毒物所致。",
+  ],
+  fatigue: [
+    "无力嗜睡反应迟缓，气虚症的表现。",
+    "魔力耗尽眼神空洞，明显是气虚。",
+    "整体萎靡不振，需要补气养身。",
+  ],
+  fracture: [
+    "肢体肿胀行动不便，骨伤症无疑。",
+    "触碰尖叫骨骼异响，肯定是骨折了。",
+    "无法站立伴随肿胀，应是骨伤。",
+  ],
+  mana_disorder: [
+    "魔力溢出元素暴走，灵脉紊乱之象。",
+    "无意识施法光环混乱，灵脉出了问题。",
+    "魔力失控的症状很明显。",
+  ],
+  curse: [
+    "噩梦连连阴影缠身，咒怨症的表现。",
+    "眼睛发黑运气极差，定是中了诅咒。",
+    "体重骤降伴随阴影，咒怨缠身。",
+  ],
+  parasite: [
+    "瘙痒难忍皮毛脱落，灵虫寄生无疑。",
+    "食量暴增但消瘦，体内有寄生虫。",
+    "皮肤凸起粪便异常，应是寄生虫作祟。",
+  ],
+  dehydration: [
+    "口干舌燥尿液深黄，津液亏损之象。",
+    "眼窝凹陷严重口渴，明显脱水了。",
+    "皮肤弹性差加口干，需要补充津液。",
+  ],
+  allergy: [
+    "皮肤红肿不停抓挠，过敏症状明显。",
+    "呼吸急促眼皮肿胀，灵兽过敏反应。",
+    "眼泪不止伴随红肿，过敏无疑。",
+  ],
+};
 
 export const INITIAL_BEDS = [
   { id: "bed_1", name: "一号病床" },

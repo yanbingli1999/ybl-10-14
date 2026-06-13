@@ -76,6 +76,31 @@ export interface Staff {
   status: StaffStatus;
   assignedBedId: string | null;
   dailyWage: number;
+  fatigue: number;
+}
+
+export interface ConsultationOpinion {
+  staffId: string;
+  staffName: string;
+  staffEmoji: string;
+  skillLevel: number;
+  fatigue: number;
+  diagnosis: DiseaseType;
+  confidence: number;
+  reasoning: string;
+}
+
+export interface ConsultationRecord {
+  id: string;
+  beastId: string;
+  beastName: string;
+  symptoms: string[];
+  startTime: number;
+  duration: number;
+  opinions: ConsultationOpinion[];
+  adoptedDiagnosis: DiseaseType | null;
+  adoptedStaffId: string | null;
+  revenueBonus: number;
 }
 
 export interface Bed {
@@ -90,6 +115,12 @@ export interface Bed {
   currentPrescriptionHerbs: string[];
   playerDiagnosis: DiseaseType | null;
   startedAt: number | null;
+  consultation: {
+    opinions: ConsultationOpinion[];
+    adoptedDiagnosis: DiseaseType | null;
+    adoptedStaffId: string | null;
+    revenueBonus: number;
+  } | null;
   beastSnapshot: {
     id: string;
     breedId: string;
@@ -126,6 +157,12 @@ export interface MedicalRecord {
   daysToHeal: number;
   evolved: boolean;
   notes: string;
+  consultation?: {
+    opinions: ConsultationOpinion[];
+    adoptedDiagnosis: DiseaseType | null;
+    adoptedStaffId: string | null;
+    revenueBonus: number;
+  };
 }
 
 export interface Transaction {

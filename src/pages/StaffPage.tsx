@@ -1,12 +1,12 @@
-import { Users, Award, Briefcase, Clock, DollarSign, PlusCircle } from "lucide-react";
+import { Users, Award, Briefcase, Clock, DollarSign, PlusCircle, Zap, Coffee } from "lucide-react";
 import { useGameStore } from "@/store/gameStore";
-import { BREEDS } from "@/data/gameData";
+import { BREEDS, CONSULTATION_CONFIG } from "@/data/gameData";
 import type { Bed } from "@/types/game";
 
 const STATUS_INFO = {
   idle: { label: "空闲中", cls: "bg-emerald-100 text-emerald-700 border-emerald-300", dot: "bg-emerald-500" },
   working: { label: "工作中", cls: "bg-clinic-jade/15 text-clinic-jade border-clinic-jade/40", dot: "bg-clinic-jade animate-pulse" },
-  resting: { label: "休息中", cls: "bg-gray-100 text-gray-600 border-gray-300", dot: "bg-gray-400" },
+  resting: { label: "休息中", cls: "bg-amber-100 text-amber-700 border-amber-300", dot: "bg-amber-500" },
 };
 
 export default function StaffPage() {
@@ -15,6 +15,7 @@ export default function StaffPage() {
   const totalWage = staff.reduce((s, x) => s + x.dailyWage, 0);
   const workingCount = staff.filter(s => s.status === "working").length;
   const money = useGameStore(s => s.money);
+  const restStaff = useGameStore(s => s.restStaff);
 
   const hire = () => {
     if (money < 200) {
@@ -33,6 +34,7 @@ export default function StaffPage() {
       status: "idle" as const,
       assignedBedId: null,
       dailyWage: 25,
+      fatigue: 0,
     };
     useGameStore.setState(s => ({
       money: s.money - 200,
@@ -43,6 +45,18 @@ export default function StaffPage() {
   };
 
   const getBedInfo = (bedId: string | null): Bed | null => bedId ? beds.find(b => b.id === bedId) ?? null : null;
+
+  const getFatigueColor = (fatigue: number): string => {
+    if (fatigue >= 70) return "text-red-500";
+    if (fatigue >= 40) return "text-amber-500";
+    return "text-emerald-500";
+  };
+
+  const getFatigueBarColor = (fatigue: number): string => {
+    if (fatigue >= 70) return "bg-red-400";
+    if (fatigue >= 40) return "bg-amber-400";
+    return "bg-emerald-400";
+  };
 
   return (
     <div className="container px-4 py-6 space-y-6 animate-fade">
@@ -115,6 +129,29 @@ export default function StaffPage() {
                     </div>
                   </div>
 
+                  {/* 疲劳度条 */}
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-[11px] text-gray-500 mb-1">
+                      <span className="flex items-center gap-1">
+                        <Zap className="w-3.5 h-3.5" /> 疲劳度
+                      </span>
+                      <span className={`font-medium ${getFatigueColor(s.fatigue)}`}>
+                        {s.fatigue}%
+                      </span>
+                    </div>
+                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${getFatigueBarColor(s.fatigue)}`}
+                        style={{ width: `${s.fatigue}%` }}
+                      />
+                    </div>
+                    {s.fatigue >= 70 && (
+                      <div className="text-[10px] text-red-500 mt-1">
+                        ⚠️ 过度疲劳，会诊可信度下降
+                      </div>
+                    )}
+                  </div>
+
                   <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
                     <div className="p-2 rounded-lg bg-white/60 border border-clinic-border/30">
                       <div className="text-gray-500">成功率加成</div>
@@ -139,8 +176,20 @@ export default function StaffPage() {
                   )}
 
                   {s.status === "idle" && (
-                    <div className="mt-3 p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-700 text-center">
-                      ✓ 随时可以分配到床位
+                    <div className="mt-3">
+                      <button
+                        onClick={() => restStaff(s.id)}
+                        className="w-full py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-xs font-medium hover:bg-amber-100 transition-colors flex items-center justify-center gap-1.5"
+                      >
+                        <Coffee className="w-3.5 h-3.5" />
+                        安排休息（恢复{CONSULTATION_CONFIG.fatigueRecoveryPerHour * 2}点，耗时2h）
+                      </button>
+                    </div>
+                  )}
+
+                  {s.status === "resting" && (
+                    <div className="mt-3 p-2 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-700 text-center">
+                      ☕ 正在休息恢复体力中...
                     </div>
                   )}
                 </div>

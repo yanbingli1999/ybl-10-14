@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { BookOpen, Heart, Star, Award, FileText, ChevronDown, ChevronUp } from "lucide-react";
+import { BookOpen, Heart, Star, Award, FileText, ChevronDown, ChevronUp, MessageCircle, Users } from "lucide-react";
 import { useGameStore } from "@/store/gameStore";
-import { BREEDS, DISEASE_NAMES, SEVERITY_NAMES, HERBS } from "@/data/gameData";
+import { BREEDS, DISEASE_NAMES, SEVERITY_NAMES, HERBS, CONSULTATION_CONFIG } from "@/data/gameData";
 import { ELEMENT_EMOJI, ELEMENT_NAMES } from "@/data/gameData";
 
 export default function ArchivePage() {
@@ -200,6 +200,60 @@ export default function ArchivePage() {
                           <div className="text-clinic-deep italic">「{r.notes}」</div>
                         </div>
                       </div>
+
+                      {r.consultation && r.consultation.opinions.length > 0 && (
+                        <div className="mt-2 p-2.5 rounded-lg bg-gradient-to-r from-clinic-jade/5 to-clinic-amber/5 border border-clinic-jade/20">
+                          <div className="flex items-center gap-1.5 mb-2 text-clinic-deep font-semibold">
+                            <MessageCircle className="w-4 h-4 text-clinic-jade" />
+                            会诊记录
+                            {r.consultation.adoptedDiagnosis && (
+                              <span className="ml-auto text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                                已采纳
+                              </span>
+                            )}
+                          </div>
+                          <div className="space-y-1.5">
+                            {r.consultation.opinions.map((op, idx) => {
+                              const isAdopted = op.staffId === r.consultation?.adoptedStaffId;
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`p-2 rounded-lg border text-[11px] ${
+                                    isAdopted
+                                      ? "bg-clinic-jade/10 border-clinic-jade/40"
+                                      : "bg-white/60 border-gray-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-1.5 mb-1">
+                                    <span className="text-base">{op.staffEmoji}</span>
+                                    <span className="font-medium text-clinic-deep">{op.staffName}</span>
+                                    <span className="text-gray-400">Lv.{op.skillLevel}</span>
+                                    {isAdopted && (
+                                      <span className="ml-auto text-[10px] text-emerald-600 font-medium">
+                                        ✓ 采纳
+                                      </span>
+                                    )}
+                                    <span className="ml-auto text-[10px] text-gray-500">
+                                      可信度 {op.confidence}%
+                                    </span>
+                                  </div>
+                                  <div className="text-gray-600">
+                                    诊断：<span className="font-medium">{DISEASE_NAMES[op.diagnosis]}</span>
+                                  </div>
+                                  <div className="text-gray-500 italic mt-0.5">
+                                    「{op.reasoning}」
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {r.consultation.revenueBonus > 0 && (
+                            <div className="mt-2 text-[11px] text-emerald-700 bg-emerald-50 p-1.5 rounded text-center">
+                              💡 会诊诊断正确，收益加成 +{Math.floor(r.consultation.revenueBonus * 100)}%
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
